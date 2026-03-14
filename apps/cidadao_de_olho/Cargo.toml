@@ -6,6 +6,10 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 default-run = "cidadao_de_olho-cli"
+description = "Aplicacao publica do projeto Olho Cidadao com backend Loco.rs e frontend React"
+readme = "README.md"
+repository = "https://github.com/owilliangoncalves/Olho-Cidadao"
+homepage = "https://github.com/owilliangoncalves/Olho-Cidadao/tree/main/apps/cidadao_de_olho"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

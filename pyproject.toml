@@ -8,10 +8,25 @@ version = "0.1.0"
 description = "ETL de dados de APIs governamentais brasileiras para investigação e análise"
 readme = "README.md"
 requires-python = ">=3.14"
+keywords = ["etl", "dados-publicos", "transparencia", "brasil", "investigacao"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Internet :: WWW/HTTP",
+    "Topic :: Utilities",
+]
 dependencies = [
     "python-dotenv>=1.2.2",
     "requests>=2.32.5",
 ]
+
+[project.urls]
+Homepage = "https://github.com/owilliangoncalves/Olho-Cidadao"
+Repository = "https://github.com/owilliangoncalves/Olho-Cidadao"
+Issues = "https://github.com/owilliangoncalves/Olho-Cidadao/issues"
+Documentation = "https://github.com/owilliangoncalves/Olho-Cidadao/tree/main/docs"
 
 [project.optional-dependencies]
 dev = [
