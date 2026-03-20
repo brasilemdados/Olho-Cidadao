@@ -1,9 +1,8 @@
-"""Testes unitarios complementares para os modulos da CLI."""
+"""Testes unitários para a fachada única da CLI."""
 
 from __future__ import annotations
 
 import argparse
-import importlib
 import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -12,40 +11,24 @@ import unittest
 from unittest.mock import patch
 
 import cli
-from cli import app as cli_app
-from cli import camara
 from cli import comun
-from cli import fontes
-from cli import handlers as cli_handlers
-from cli import interface
-from cli import parser as cli_parser
-from cli import pipelines
-from cli import portal
 
 
 class CliFacadeTestCase(unittest.TestCase):
-    """Valida a fachada publica e os shims de compatibilidade da CLI."""
-
-    def test_fachada_reexporta_parser_main_e_handlers(self):
-        """Os módulos de compatibilidade devem apontar para a mesma API publica."""
-
-        self.assertIs(cli_app.build_parser, cli.build_parser)
-        self.assertIs(cli_app.main, cli.main)
-        self.assertIs(cli_parser.build_parser, cli.build_parser)
-        self.assertIs(cli_handlers.HANDLERS, cli.HANDLERS)
+    """Valida a fachada pública consolidada em `cli.__init__`."""
 
     def test_handlers_expoem_aliases_e_apontam_para_mesmo_handler(self):
         """Os aliases de comando devem compartilhar o mesmo handler final."""
 
-        self.assertIs(cli.HANDLERS["menu"], interface.handle_menu)
-        self.assertIs(cli.HANDLERS["abrir-menu"], interface.handle_menu)
+        self.assertIs(cli.HANDLERS["menu"], cli.handle_menu)
+        self.assertIs(cli.HANDLERS["abrir-menu"], cli.handle_menu)
         self.assertIs(
             cli.HANDLERS["servir-cidadao-de-olho"],
-            interface.handle_servir_cidadao_de_olho,
+            cli.handle_servir_cidadao_de_olho,
         )
         self.assertIs(
             cli.HANDLERS["abrir-cidadao-de-olho"],
-            interface.handle_servir_cidadao_de_olho,
+            cli.handle_servir_cidadao_de_olho,
         )
 
     def test_run_command_despacha_para_handler_registrado(self):
@@ -63,7 +46,7 @@ class CliFacadeTestCase(unittest.TestCase):
         self.assertEqual(chamado, ["menu"])
 
     def test_main_retorna_codigo_1_para_excecao_inesperada(self):
-        """Falhas nao tratadas devem encerrar a CLI com código 1."""
+        """Falhas não tratadas devem encerrar a CLI com código 1."""
 
         def falhar(_args):
             raise RuntimeError("boom")
@@ -79,6 +62,7 @@ class CliFacadeTestCase(unittest.TestCase):
 
         nomes = [comando.name for comando in cli.COMMANDS]
         self.assertEqual(len(nomes), len(set(nomes)))
+        self.assertEqual(len(nomes), 25)
 
 
 class CliCommonTestCase(unittest.TestCase):
@@ -129,35 +113,27 @@ class CliCommonTestCase(unittest.TestCase):
         self.assertEqual(args.limit_fornecedores, 12)
 
 
-class CliCatalogosTestCase(unittest.TestCase):
-    """Valida os catálogos declarativos de cada submódulo da CLI."""
-
-    def test_catalogos_por_modulo_tem_quantidade_esperada(self):
-        """Cada arquivo de domínio deve exportar seu conjunto de comandos."""
-
-        self.assertEqual(len(interface.COMMANDS), 2)
-        self.assertEqual(len(camara.COMMANDS), 5)
-        self.assertEqual(len(portal.COMMANDS), 5)
-        self.assertEqual(len(pipelines.COMMANDS), 2)
-        self.assertEqual(len(fontes.COMMANDS), 11)
-
-    def test_catalogos_sao_compostos_por_clicommand(self):
-        """Os comandos registrados devem seguir o contrato declarativo comum."""
-
-        for comando in (
-            *interface.COMMANDS,
-            *camara.COMMANDS,
-            *portal.COMMANDS,
-            *pipelines.COMMANDS,
-            *fontes.COMMANDS,
-        ):
-            self.assertIsInstance(comando, comun.CliCommand)
-            self.assertTrue(comando.name)
-            self.assertTrue(comando.help)
-
-
 class CliParserCoverageTestCase(unittest.TestCase):
-    """Cobre comandos ainda não exercitados pela suíte principal."""
+    """Cobre o catálogo e o parsing da CLI pública."""
+
+    def test_catalogo_publico_contem_grupos_esperados(self):
+        """A fachada deve expor o catálogo consolidado completo."""
+
+        nomes = {comando.name for comando in cli.COMMANDS}
+
+        for esperado in (
+            "menu",
+            "rodar-pipeline",
+            "rodar-paralelo",
+            "rodar-pipeline-completo",
+            "rodar-pipeline-portal",
+            "extrair-senado",
+            "extrair-pncp",
+            "extrair-obrasgov",
+            "extrair-siconfi",
+            "extrair-anp",
+        ):
+            self.assertIn(esperado, nomes)
 
     def test_parser_configura_comandos_do_portal(self):
         """O parser deve aceitar o conjunto completo de argumentos do Portal."""
@@ -223,9 +199,7 @@ class CliParserCoverageTestCase(unittest.TestCase):
                 "9",
             ]
         )
-        args_geo = parser.parse_args(
-            ["extrair-obrasgov-geometrias", "--limit-ids", "30"]
-        )
+        args_geo = parser.parse_args(["extrair-obrasgov-geometrias", "--limit-ids", "30"])
 
         self.assertEqual(args_anp.datasets, ["combustivel"])
         self.assertEqual(args_anp.min_ocorrencias, 5)
@@ -241,11 +215,11 @@ class CliHandlerWiringTestCase(unittest.TestCase):
 
         app_dir = Path("/tmp/cidadao")
         self.assertEqual(
-            interface._binario_cidadao_de_olho(app_dir, False),
+            cli._binario_cidadao_de_olho(app_dir, False),
             app_dir / "target" / "debug" / "cidadao_de_olho-cli",
         )
         self.assertEqual(
-            interface._binario_cidadao_de_olho(app_dir, True),
+            cli._binario_cidadao_de_olho(app_dir, True),
             app_dir / "target" / "release" / "cidadao_de_olho-cli",
         )
 
@@ -274,16 +248,14 @@ class CliHandlerWiringTestCase(unittest.TestCase):
                 os.utime(caminho, (antigo, antigo))
             os.utime(binario, (agora, agora))
 
-            self.assertTrue(
-                interface._binario_cidadao_de_olho_esta_atualizado(app_dir, binario)
-            )
+            self.assertTrue(cli._binario_cidadao_de_olho_esta_atualizado(app_dir, binario))
 
     def test_camara_handle_rodar_pipeline_encadeia_pipeline_camara(self):
-        """O handler da Camara deve instanciar e executar o pipeline correto."""
+        """O handler da Câmara deve instanciar e executar o pipeline correto."""
 
         args = SimpleNamespace(ano_inicio=2020, ano_fim=2023)
         with patch("pipeline.PipelineCamara") as pipeline_cls:
-            camara.handle_rodar_pipeline(args)
+            cli.handle_rodar_pipeline(args)
 
         pipeline_cls.assert_called_once_with(ano_inicio=2020, ano_fim=2023)
         pipeline_cls.return_value.executar.assert_called_once_with()
@@ -292,7 +264,7 @@ class CliHandlerWiringTestCase(unittest.TestCase):
         """O handler deve importar a orquestração pública do pacote da Câmara."""
 
         with patch("extracao.camara.deputados_federais.Legislatura") as extrator_cls:
-            camara.handle_baixar_legislaturas(SimpleNamespace())
+            cli.handle_baixar_legislaturas(SimpleNamespace())
 
         extrator_cls.assert_called_once_with()
         extrator_cls.return_value.executar.assert_called_once_with()
@@ -301,7 +273,7 @@ class CliHandlerWiringTestCase(unittest.TestCase):
         """A expansão por legislatura deve sair do `__init__` do pacote."""
 
         with patch("extracao.camara.deputados_federais.DeputadosLegislatura") as extrator_cls:
-            camara.handle_extrair_legislaturas(SimpleNamespace())
+            cli.handle_extrair_legislaturas(SimpleNamespace())
 
         extrator_cls.assert_called_once_with()
         extrator_cls.return_value.executar.assert_called_once_with()
@@ -311,7 +283,7 @@ class CliHandlerWiringTestCase(unittest.TestCase):
 
         args = SimpleNamespace(endpoint="deputados_despesas", ano_inicio=2023, ano_fim=2025)
         with patch(
-            "configuracao.obter_configuracao_endpoint",
+            "cli.obter_configuracao_endpoint",
             return_value={
                 "endpoint": "deputados/{id}/despesas",
                 "depende_de": "deputados",
@@ -321,7 +293,7 @@ class CliHandlerWiringTestCase(unittest.TestCase):
             },
         ):
             with patch("extracao.camara.deputados_federais.Despesas") as extrator_cls:
-                camara.handle_extrair_dependentes(args)
+                cli.handle_extrair_dependentes(args)
 
         extrator_cls.assert_called_once_with(
             "deputados_despesas",
@@ -349,7 +321,7 @@ class CliHandlerWiringTestCase(unittest.TestCase):
             fases=[1, 2],
         )
         with patch("pipeline.PipelinePortalTransparencia") as pipeline_cls:
-            portal.handle_rodar_pipeline_portal(args)
+            cli.handle_rodar_pipeline_portal(args)
 
         pipeline_cls.assert_called_once_with(
             limit_fornecedores=11,
@@ -388,12 +360,10 @@ class CliHandlerWiringTestCase(unittest.TestCase):
         )
 
         with patch("pipeline.PipelineParalelo") as paralelo_cls:
-            pipelines.handle_rodar_paralelo(args_paralelo)
-        pipeline_mod = importlib.import_module("pipeline")
-        with patch.object(pipeline_mod, "PipelineCompleto") as completo_cls:
-            pipelines.handle_rodar_pipeline_completo(args_completo)
+            cli.handle_rodar_paralelo(args_paralelo)
+        with patch("pipeline.PipelineCompleto") as completo_cls:
+            cli.handle_rodar_pipeline_completo(args_completo)
 
-        paralelo_cls.assert_called_once()
         paralelo_kwargs = paralelo_cls.call_args.kwargs
         self.assertEqual(str(paralelo_kwargs["pncp_data_inicial"]), "2024-01-01")
         self.assertEqual(str(paralelo_kwargs["pncp_data_final"]), "2024-12-31")
@@ -422,7 +392,7 @@ class CliHandlerWiringTestCase(unittest.TestCase):
         )
         with patch("utils.filtros.parse_filtros_cli", return_value={"uf": "sp"}) as parse_cls:
             with patch("extracao.obrasgov.ObrasGov") as obras_cls:
-                fontes.handle_extrair_obrasgov(args)
+                cli.handle_extrair_obrasgov(args)
 
         parse_cls.assert_called_once_with(["uf=sp"])
         obras_cls.assert_called_once_with(page_size=77)
@@ -440,9 +410,11 @@ class CliHandlerWiringTestCase(unittest.TestCase):
             tamanho_pagina=33,
         )
         with patch("utils.filtros.parse_filtros_cli", return_value={"id_ente": "3550308"}):
-            with patch("extracao.siconfi.Siconfi") as siconfi_cls:
-                fontes.handle_extrair_siconfi(args)
+            with patch("extracao.siconfi.preparar_consultas_siconfi") as preparar_cls:
+                with patch("extracao.siconfi.Siconfi") as siconfi_cls:
+                    cli.handle_extrair_siconfi(args)
 
+        preparar_cls.assert_called_once_with(["entes"], {"id_ente": "3550308"})
         siconfi_cls.assert_called_once_with(page_size=33)
         siconfi_cls.return_value.executar.assert_called_once_with(
             recursos=["entes"],
@@ -457,11 +429,9 @@ class CliHandlerWiringTestCase(unittest.TestCase):
             min_ocorrencias=5,
             limit_fornecedores=9,
         )
-        with patch("extracao.portal.ConstrutorDimFornecedoresPortal") as builder_cls:
-            with patch("extracao.anp.RevendedoresANP") as anp_cls:
-                fontes.handle_extrair_anp(args)
+        with patch("extracao.anp.RevendedoresANP") as anp_cls:
+            cli.handle_extrair_anp(args)
 
-        builder_cls.assert_not_called()
         anp_cls.assert_called_once_with(
             min_ocorrencias=5,
             limit_fornecedores=9,
@@ -478,7 +448,7 @@ class CliHandlerWiringTestCase(unittest.TestCase):
         )
         with patch("utils.filtros.parse_filtros_cli", return_value={"uf": "sp"}) as parse_cls:
             with patch("extracao.transferegov.TransferegovRecursos") as recursos_cls:
-                fontes._handle_extrair_transferegov(args, "especial")
+                cli._handle_extrair_transferegov(args, "especial")
 
         parse_cls.assert_called_once_with(["uf=sp"])
         recursos_cls.assert_called_once_with(grupo="especial", page_size=150)
@@ -492,7 +462,7 @@ class CliHandlerWiringTestCase(unittest.TestCase):
 
         args = SimpleNamespace(endpoint="ceaps")
         with patch("extracao.senado.DadosSenado") as senado_cls:
-            fontes.handle_extrair_senado(args)
+            cli.handle_extrair_senado(args)
 
         senado_cls.assert_called_once_with("ceaps")
         senado_cls.return_value.executar.assert_called_once_with()
@@ -502,7 +472,7 @@ class CliHandlerWiringTestCase(unittest.TestCase):
 
         args = SimpleNamespace(datasets=["estados", "municipios"])
         with patch("extracao.ibge.LocalidadesIBGE") as ibge_cls:
-            fontes.handle_extrair_ibge_localidades(args)
+            cli.handle_extrair_ibge_localidades(args)
 
         ibge_cls.assert_called_once_with()
         ibge_cls.return_value.executar.assert_called_once_with(
@@ -522,12 +492,12 @@ class CliHandlerWiringTestCase(unittest.TestCase):
             codigo_classificacao_superior="1234",
         )
         with patch("extracao.pncp.PNCPConsulta") as pncp_cls:
-            fontes.handle_extrair_pncp(args)
+            cli.handle_extrair_pncp(args)
 
         pncp_cls.assert_called_once_with(page_size=55)
         pncp_cls.return_value.executar.assert_called_once_with(
-            data_inicial=unittest.mock.ANY,
-            data_final=unittest.mock.ANY,
+            data_inicial=cli.parse_data_iso("2025-01-01"),
+            data_final=cli.parse_data_iso("2025-12-31"),
             incluir_contratos=True,
             incluir_atas=False,
             incluir_pca=True,

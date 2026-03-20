@@ -30,9 +30,10 @@ class PortalTestCase(unittest.TestCase):
     def test_base_rejeita_ausencia_da_chave_da_api_com_erro_de_uso(self):
         """Falta de chave do Portal deve falhar sem traceback genérico."""
 
-        with patch.dict("os.environ", {}, clear=True):
-            with self.assertRaises(UserInputError):
-                _ExtratorPortalConcreto("/api-de-dados/ceis")
+        with patch("extracao.portal.base.load_dotenv"):
+            with patch.dict("os.environ", {}, clear=True):
+                with self.assertRaises(UserInputError):
+                    _ExtratorPortalConcreto("/api-de-dados/ceis")
 
     def test_pipeline_portal_rejeita_intervalo_anual_invalido(self):
         """O pipeline do Portal deve validar o intervalo antes de rodar."""

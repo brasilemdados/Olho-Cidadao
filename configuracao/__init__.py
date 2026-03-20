@@ -1,8 +1,7 @@
 """Fachada publica da camada de configuracao do projeto.
 
 Este pacote expõe um ponto único para carregamento, acesso tipado e
-resolução de datas. Os módulos legados (`config.py`, `endpoint.py`,
-`pipeline.py` e `projeto.py`) permanecem apenas como compatibilidade.
+resolução de datas.
 """
 
 from __future__ import annotations
