@@ -20,10 +20,10 @@ Arquivos principais:
 - `cli/app.py`
 - `cli/parser.py`
 - `cli/handlers.py`
-- `cli/common.py`
-- `pipeline.py`
-- `pipeline_paralelo.py`
-- `pipeline_portal.py`
+- `cli/comun.py`
+- `pipeline/__init__.py`
+- `pipeline/config.py`
+- `pipeline/tarefas.py`
 
 Responsabilidades:
 

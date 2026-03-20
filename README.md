@@ -197,9 +197,7 @@ Exemplos:
 ├── utils/
 ├── etl-config.toml
 ├── main.py
-├── pipeline.py
-├── pipeline_paralelo.py
-├── pipeline_portal.py
+├── pipeline/
 └── pyproject.toml
 ```
 

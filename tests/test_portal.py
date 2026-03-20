@@ -8,10 +8,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from extracao.portal import ConstrutorDimFornecedoresPortal
 from extracao.portal.base import ExtratorPortalBase
-from extracao.portal.fornecedores import ConstrutorDimFornecedoresPortal
+from extracao.portal.config import PortalFornecedoresConfig
+from extracao.portal.tarefas import gerar_tarefas_documentos
+from extracao.portal.tarefas import params_sancao
 from infra.errors import UserInputError
-from pipeline_portal import PipelinePortalTransparencia
+from pipeline import PipelinePortalTransparencia
 
 
 class _ExtratorPortalConcreto(ExtratorPortalBase):
@@ -41,7 +44,7 @@ class PortalTestCase(unittest.TestCase):
         """A etapa de documentos exige ao menos uma fase válida."""
 
         with patch(
-            "pipeline_portal.obter_parametros_pipeline",
+            "pipeline.config.obter_parametros_pipeline",
             return_value={"min_ocorrencias": 1, "fases": []},
         ):
             pipeline = PipelinePortalTransparencia()
@@ -78,8 +81,8 @@ class PortalTestCase(unittest.TestCase):
             ]
 
             with patch(
-                "extracao.portal.fornecedores.obter_parametros_extrator",
-                return_value={"min_ocorrencias": 2},
+                "extracao.portal.fornecedores.PortalFornecedoresConfig.carregar",
+                return_value=PortalFornecedoresConfig(min_ocorrencias=2),
             ):
                 with patch.object(builder, "_iterar_registros", return_value=iter(registros)):
                     builder.construir()
@@ -87,6 +90,44 @@ class PortalTestCase(unittest.TestCase):
             conteudo = [json.loads(linha) for linha in output_path.read_text().splitlines()]
             self.assertEqual(len(conteudo), 1)
             self.assertEqual(conteudo[0]["documento"], "12345678000190")
+
+    def test_gerar_tarefas_documentos_aplica_recorte_e_ordem(self):
+        """As tarefas devem respeitar anos válidos e ordem de execução."""
+
+        fornecedores = [
+            {"documento": "11111111111111", "anos": [2022, 2024]},
+            {"documento": "22222222222222", "anos": [2024]},
+        ]
+
+        tarefas = gerar_tarefas_documentos(
+            fornecedores,
+            [1, 2],
+            ano_inicio=2023,
+            ano_fim=2025,
+        )
+
+        self.assertEqual(
+            tarefas,
+            [
+                ("22222222222222", 2024, 2),
+                ("11111111111111", 2024, 2),
+                ("22222222222222", 2024, 1),
+                ("11111111111111", 2024, 1),
+            ],
+        )
+
+    def test_params_sancao_restringe_cepim_a_cnpj(self):
+        """CEPIM deve exigir CNPJ, enquanto CEIS aceita qualquer documento."""
+
+        self.assertEqual(
+            params_sancao("ceis", "12345678901"),
+            {"codigoSancionado": "12345678901"},
+        )
+        self.assertIsNone(params_sancao("cepim", "12345678901"))
+        self.assertEqual(
+            params_sancao("cepim", "12345678000190"),
+            {"cnpjSancionado": "12345678000190"},
+        )
 
 
 if __name__ == "__main__":
