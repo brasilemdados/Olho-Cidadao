@@ -25,10 +25,21 @@ Indice central da documentacao modular do projeto.
 
 - `main.py` e apenas o ponto de entrada publico da CLI
 - `cli/__init__.py` concentra parser, handlers e bootstrap da interface de linha de comando
+- `utils/csv/__init__.py` concentra a orquestracao da camada analitica normalizada em CSV
+- `utils/grafo/__init__.py` concentra a orquestracao da camada de grafos analiticos
 - `etl-config.toml` e a fonte de verdade da configuracao operacional do ETL
 - `rodar-pipeline-completo` resolve parametros com precedencia `CLI -> [pipelines.completo]` em [etl-config.toml](../etl-config.toml)
 - `rodar-pipeline` e `rodar-paralelo` também delegam seus defaults operacionais ao `etl-config.toml`, em vez de embutirem anos, fontes ou janelas de datas no codigo
 - o preflight desse comando apenas valida a configuracao final antes da execucao
+
+## Camada analitica
+
+- `gerar-csv` produz apenas a camada final de analise em `data/csv/`
+- a orquestracao da geracao fica em `utils/csv/__init__.py`
+- `gerar-grafo` deriva redes analiticas a partir de `data/csv/` e publica em `data/grafo/`
+- a pipeline da Camara nao consolida CSV no meio da extracao; essa etapa ficou isolada no comando dedicado
+- os arquivos finais ficam em uma pasta unica, sem subpastas artificiais por fonte
+- a camada final prioriza 3FN minima: dimensoes pequenas, fatos sem colunas operacionais e separacao entre competencia e data do documento quando o dado oficial exige isso
 
 ## Convencoes gerais
 

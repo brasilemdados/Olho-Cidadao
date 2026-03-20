@@ -43,6 +43,22 @@ def _configurar_gerar_csv(parser: argparse.ArgumentParser):
     )
 
 
+def _configurar_gerar_grafo(parser: argparse.ArgumentParser):
+    """Configura argumentos do gerador de grafos."""
+
+    config = obter_parametros_cli("gerar_grafo")
+    parser.add_argument(
+        "--csv-dir",
+        default=config.get("csv_dir"),
+        help="Diretório raiz da camada CSV analítica.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=config.get("output_dir"),
+        help="Diretório raiz onde os grafos serão salvos.",
+    )
+
+
 def _configurar_extrair_dependentes(parser: argparse.ArgumentParser):
     """Configura argumentos do extrator de dados dependentes da Câmara."""
 
@@ -397,10 +413,21 @@ def handle_servir_cidadao_de_olho(args: argparse.Namespace):
 def handle_gerar_csv(args: argparse.Namespace):
     """Executa todos os geradores de CSV registrados no projeto."""
 
-    from utils.csv.orquestrador_csv import OrquestradorGeracaoCSVs
+    from utils.csv import GeradorCSVs
 
-    OrquestradorGeracaoCSVs(
+    GeradorCSVs(
         data_dir=args.data_dir,
+        output_dir=args.output_dir,
+    ).executar()
+
+
+def handle_gerar_grafo(args: argparse.Namespace):
+    """Executa todos os geradores de grafo registrados no projeto."""
+
+    from utils.grafo import GeradorGrafos
+
+    GeradorGrafos(
+        csv_dir=args.csv_dir,
         output_dir=args.output_dir,
     ).executar()
 
@@ -647,6 +674,12 @@ COMMANDS: tuple[CliCommand, ...] = (
         configure_parser=_configurar_gerar_csv,
     ),
     CliCommand(
+        name="gerar-grafo",
+        help="Executa todos os geradores de grafo registrados no projeto.",
+        handler=handle_gerar_grafo,
+        configure_parser=_configurar_gerar_grafo,
+    ),
+    CliCommand(
         name="extrair-legislaturas",
         help="Extrai os deputados vinculados às legislaturas.",
         handler=handle_extrair_legislaturas,
@@ -848,6 +881,7 @@ __all__ = [
     "handle_extrair_siconfi",
     "handle_extrair_siop",
     "handle_gerar_csv",
+    "handle_gerar_grafo",
     "handle_menu",
     "handle_portal_construir_fornecedores",
     "handle_rodar_paralelo",

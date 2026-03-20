@@ -86,9 +86,35 @@ uv run python main.py baixar-legislaturas
 uv run python main.py extrair-legislaturas
 uv run python main.py extrair-dependentes --endpoint deputados_despesas --ano-inicio 2012 --ano-fim 2026
 uv run python main.py gerar-csv
+uv run python main.py gerar-grafo
 ```
 
-`gerar-csv` executa todos os geradores de CSV disponíveis sobre os dados já extraídos.
+`gerar-csv` só roda depois que as extrações base já terminaram e gera a camada
+analítica normalizada em `data/csv/`, incluindo:
+
+- `dim_tempo.csv`, `dim_competencia_mensal.csv`
+- `dim_tipos_documento_fiscal.csv`, `dim_tipos_despesa.csv`
+- `dim_legislaturas_dep_federais.csv`
+- `dim_dep_federal.csv`, `dim_deputados_federais_referencia.csv`
+- `tb_documentos_despesas_deputados.csv`, `tb_despesas_deputados.csv`
+- `dim_senadores.csv`, `tb_documentos_despesas_senadores.csv`, `tb_despesas_senadores.csv`
+- `dim_regioes.csv`, `dim_estados.csv`, `dim_mesorregioes.csv`, `dim_microrregioes.csv`
+- `dim_regioes_intermediarias.csv`, `dim_regioes_imediatas.csv`, `dim_municipios.csv`
+- `dim_entes.csv`
+- `dim_funcao_siop.csv`, `dim_subfuncao_siop.csv`, `dim_programa.csv`, `dim_acao_siop.csv`
+- `dim_unidades_orcamentarias.csv`, `dim_fontes_recurso.csv`, `dim_gnds.csv`
+- `dim_modalidades_aplicacao.csv`, `dim_elementos_despesa.csv`, `tb_execucao_orcamentaria.csv`
+- `dim_fornecedores.csv`
+
+Critérios dessa camada:
+
+- remove metadados operacionais como `uri`, `endpoint` e afins dos CSVs analíticos;
+- separa competência mensal de data do documento, porque essas datas divergem nas bases da Câmara e do Senado;
+- evita duplicação de atributos transitivos, mantendo as dimensões com chaves naturais claras e os fatos só com o grão necessário para análise.
+
+Depois da camada CSV, `gerar-grafo` publica a rede agregada em `data/grafo/`
+no formato `cytoscape.js`, pronta para consumo por backend Rust e frontend
+React + Vite.
 
 Pipelines:
 

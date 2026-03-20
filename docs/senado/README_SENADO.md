@@ -25,6 +25,16 @@ uv run python main.py extrair-senado --endpoint ceaps
 
 - `data/senadores/ceaps_<ano>.json`
 
+## Saída analítica via `gerar-csv`
+
+- `data/csv/dim_tempo.csv`
+- `data/csv/dim_competencia_mensal.csv`
+- `data/csv/dim_tipos_documento_fiscal.csv`
+- `data/csv/dim_tipos_despesa.csv`
+- `data/csv/dim_senadores.csv`
+- `data/csv/tb_documentos_despesas_senadores.csv`
+- `data/csv/tb_despesas_senadores.csv`
+
 ## Estratégia do crawler
 
 - processamento do ano mais recente para o mais antigo
@@ -43,7 +53,7 @@ uv run python main.py extrair-senado --endpoint ceaps
 - `persistencia.py` isola a serialização anual
 - `tarefas.py` concentra helpers puros de ordem e contagem
 
-## Campos importantes para banco e joins
+## Campos importantes no staging JSONL
 
 - `id`
 - `codSenador`
@@ -62,8 +72,18 @@ uv run python main.py extrair-senado --endpoint ceaps
 - `orgao_origem`
 - `endpoint_origem`
 
+## Contrato analítico final
+
+Em `tb_despesas_senadores.csv`, a granularidade passou a ser uma despesa reembolsada.
+Por isso:
+
+- `tb_documentos_despesas_senadores.csv` concentra fornecedor, tipo, data, número e detalhamento do documento;
+- `ano`, `mes` e `data` não ficam duplicados no fato; o join temporal é feito por `id_competencia` e `id_documento_despesa`;
+- metadados operacionais como `orgao_origem` e `endpoint_origem` permanecem só no staging;
+- fornecedor entra por `id_fornecedor`, reaproveitando a dimensão consolidada local.
+
 ## Join sugerido
 
 - fornecedor: `documento_fornecedor_normalizado`
-- comparacao temporal: `ano`, `ano_arquivo`, `data`
+- comparacao temporal: `id_competencia` e `id_documento_despesa`
 - ator politico: `codSenador`

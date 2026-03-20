@@ -83,6 +83,14 @@ Para reduzir erros de uso, o extrator aceita alguns aliases (apelidos) e os conv
 
 - `data/siconfi/<recurso>/consulta=<assinatura>.json`
 
+Saída analítica derivada via `gerar-csv`:
+
+- `data/csv/dim_entes.csv`
+
+O CSV final mantém apenas atributos estáveis de identificação do ente. Campos
+temporais e redundantes usados para decidir a versão mais recente ficam restritos
+ao staging JSONL.
+
 ## Campos importantes para joins
 
 Exemplos observados em `entes`:

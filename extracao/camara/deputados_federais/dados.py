@@ -160,6 +160,13 @@ def enriquecer_registro_despesa(
     registro = dict(dado)
     registro["id_deputado"] = deputado_id
     registro["ano_arquivo"] = ano
+    registro["id_documento_despesa"] = registro.get("codDocumento")
+
+    data_documento = registro.get("dataDocumento")
+    if isinstance(data_documento, str) and data_documento:
+        registro["data_documento"] = data_documento.split("T", maxsplit=1)[0]
+    else:
+        registro["data_documento"] = None
 
     id_legislatura = contexto_deputado.get("id_legislatura")
     if id_legislatura is not None:

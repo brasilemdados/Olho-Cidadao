@@ -47,6 +47,7 @@ class SiopTransformador:
 
         return {
             "ano": ano,
+            "id_item_despesa": self.codigo_da_uri(item_uri),
             "uri_item": item_uri,
             "grafo_orcamentario_uri": f"http://orcamento.dados.gov.br/{ano}/",
             "uri_funcao": funcao_uri,
