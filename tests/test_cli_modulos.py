@@ -62,7 +62,7 @@ class CliFacadeTestCase(unittest.TestCase):
 
         nomes = [comando.name for comando in cli.COMMANDS]
         self.assertEqual(len(nomes), len(set(nomes)))
-        self.assertEqual(len(nomes), 25)
+        self.assertEqual(len(nomes), 26)
 
 
 class CliCommonTestCase(unittest.TestCase):
@@ -123,6 +123,7 @@ class CliParserCoverageTestCase(unittest.TestCase):
 
         for esperado in (
             "menu",
+            "gerar-grafo",
             "rodar-pipeline",
             "rodar-paralelo",
             "rodar-pipeline-completo",
@@ -259,6 +260,26 @@ class CliHandlerWiringTestCase(unittest.TestCase):
 
         pipeline_cls.assert_called_once_with(ano_inicio=2020, ano_fim=2023)
         pipeline_cls.return_value.executar.assert_called_once_with()
+
+    def test_handle_gerar_csv_usa_a_fachada_publica_do_pacote(self):
+        """O comando de CSV deve delegar a geração para `utils.csv.__init__`."""
+
+        args = SimpleNamespace(data_dir="data", output_dir="data/csv")
+        with patch("utils.csv.GeradorCSVs") as gerador_cls:
+            cli.handle_gerar_csv(args)
+
+        gerador_cls.assert_called_once_with(data_dir="data", output_dir="data/csv")
+        gerador_cls.return_value.executar.assert_called_once_with()
+
+    def test_handle_gerar_grafo_usa_a_fachada_publica_do_pacote(self):
+        """O comando de grafo deve delegar a geração para `utils.grafo.__init__`."""
+
+        args = SimpleNamespace(csv_dir="data/csv", output_dir="data/grafo")
+        with patch("utils.grafo.GeradorGrafos") as gerador_cls:
+            cli.handle_gerar_grafo(args)
+
+        gerador_cls.assert_called_once_with(csv_dir="data/csv", output_dir="data/grafo")
+        gerador_cls.return_value.executar.assert_called_once_with()
 
     def test_camara_handle_baixar_legislaturas_usa_pacote_publico(self):
         """O handler deve importar a orquestração pública do pacote da Câmara."""

@@ -1,638 +1,380 @@
-"""Testes para a consolidação CSV da Câmara."""
+"""Testes da camada analitica final em CSV."""
+
+from __future__ import annotations
 
 import csv
 import json
-import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
+import unittest
+from unittest.mock import patch
 
-from utils.csv.atas_pncp import ConversorAtasPNCPCSV
-from utils.csv.despesas_deputados import ConversorDespesasCSV
-from utils.csv.estados_ibge import ConversorEstadosIBGECSV
-from utils.csv.fornecedores_portal import ConversorFornecedoresPortalCSV
-from utils.csv.municipios_ibge import ConversorMunicipiosIBGECSV
-from utils.csv.orcamento_item_despesa_particoes_siop import ConversorParticoesOrcamentoItemDespesaSIOPCSV
-from utils.csv.orquestrador_csv import OrquestradorGeracaoCSVs
-from utils.csv.orcamento_item_despesa_siop import ConversorOrcamentoItemDespesaSIOPCSV
-from utils.csv.regioes_ibge import ConversorRegioesIBGECSV
+from infra.errors import UserInputError
+from utils.csv import GeradorCSVs
 
 
-class ConversorDespesasCSVTestCase(unittest.TestCase):
-    """Valida a geração do CSV consolidado a partir de JSON Lines locais."""
+class GeracaoCSVTestCase(unittest.TestCase):
+    """Valida o contrato da geração analítica em `data/csv`."""
 
-    def test_consolidador_gera_csv_com_colunas_esperadas(self):
-        """Uma despesa válida deve resultar em um CSV com cabeçalho e uma linha."""
+    def _escrever_jsonl(self, caminho: Path, *registros: dict) -> None:
+        caminho.parent.mkdir(parents=True, exist_ok=True)
+        with caminho.open("w", encoding="utf-8") as arquivo:
+            for registro in registros:
+                json.dump(registro, arquivo, ensure_ascii=False)
+                arquivo.write("\n")
 
-        with TemporaryDirectory() as tmp:
-            base = Path(tmp)
-            despesas_dir = base / "data" / "despesas_deputados_federais" / "2025"
-            despesas_dir.mkdir(parents=True)
+    def _ler_csv(self, caminho: Path) -> list[list[str]]:
+        with caminho.open(encoding="utf-8") as arquivo:
+            return list(csv.reader(arquivo))
 
-            registro = {
-                "id_deputado": "123",
+    def _criar_fontes_minimas(self, base: Path) -> Path:
+        data_dir = base / "data"
+
+        self._escrever_jsonl(
+            data_dir / "legislaturas.json",
+            {"id": 57, "dataInicio": "2023-02-01", "dataFim": "2027-01-31"},
+        )
+        self._escrever_jsonl(
+            data_dir / "deputados_por_legislaturas" / "deputados_legislaturas_57.json",
+            {
+                "id": 123,
+                "nome": "Deputado Exemplo",
+                "siglaPartido": "ABC",
+                "siglaUf": "SP",
+                "idLegislatura": 57,
+            },
+        )
+        self._escrever_jsonl(
+            data_dir / "despesas_deputados_federais" / "2025" / "despesas_123.json",
+            {
+                "id_deputado": 123,
                 "id_legislatura": 57,
                 "nome_deputado": "Deputado Exemplo",
-                "uri_deputado": "https://dadosabertos.camara.leg.br/api/v2/deputados/123",
                 "sigla_uf_deputado": "SP",
                 "sigla_partido_deputado": "ABC",
-                "nomeFornecedor": "Fornecedor Exemplo",
+                "nomeFornecedor": "Fornecedor Camara",
                 "cnpjCpfFornecedor": "12345678000190",
                 "documento_fornecedor_normalizado": "12345678000190",
                 "tipo_documento_fornecedor": "cnpj",
                 "cnpj_base_fornecedor": "12345678",
+                "codDocumento": "7514302",
+                "tipoDocumento": "Nota Fiscal",
+                "codTipoDocumento": 0,
+                "dataDocumento": "2025-04-10T00:00:00",
+                "data_documento": "2025-04-10",
+                "numDocumento": "NF-29",
+                "codLote": 111,
+                "numRessarcimento": "",
+                "parcela": 0,
+                "valorDocumento": "100.00",
+                "valorGlosa": "0.00",
                 "valorLiquido": "100.00",
                 "ano": 2025,
                 "mes": 3,
-                "tipoDespesa": "COMBUSTÍVEIS E LUBRIFICANTES.",
-            }
+                "tipoDespesa": "COMBUSTIVEL",
+            },
+        )
 
-            arquivo = despesas_dir / "despesas_123.json"
-            with open(arquivo, "w", encoding="utf-8") as f:
-                json.dump(registro, f, ensure_ascii=False)
-                f.write("\n")
-
-            conversor = ConversorDespesasCSV(
-                data_dir=str(base / "data"),
-                output_dir=str(base / "data" / "csv" / "despesas"),
-                log_dir=str(base / "logs"),
-            )
-            conversor.executar()
-
-            csv_path = base / "data" / "csv" / "despesas" / "despesas.csv"
-            self.assertTrue(csv_path.exists())
-
-            with open(csv_path, encoding="utf-8") as f:
-                linhas = list(csv.reader(f))
-
-            self.assertEqual(len(linhas), 2)
-            self.assertEqual(linhas[1][0], "123")
-            self.assertEqual(linhas[1][5], "Fornecedor Exemplo")
-
-    def test_consolidador_ibge_gera_dimensao_regioes(self):
-        """O arquivo de regiões do IBGE deve gerar sua própria dimensão."""
-
-        with TemporaryDirectory() as tmp:
-            base = Path(tmp)
-            localidades_dir = base / "data" / "ibge" / "localidades"
-            localidades_dir.mkdir(parents=True)
-
-            with open(localidades_dir / "regioes.json", "w", encoding="utf-8") as f:
-                json.dump({"_meta": {"dataset": "regioes"}, "payload": {"id": 1, "sigla": "N", "nome": "Norte"}}, f, ensure_ascii=False)
-                f.write("\n")
-
-            conversor = ConversorRegioesIBGECSV(
-                data_dir=str(base / "data"),
-                output_dir=str(base / "data" / "csv" / "ibge"),
-                log_dir=str(base / "logs"),
-            )
-            conversor.executar()
-
-            csv_path = base / "data" / "csv" / "ibge" / "dim_regioes.csv"
-            self.assertTrue(csv_path.exists())
-
-            with open(csv_path, encoding="utf-8") as f:
-                linhas = list(csv.reader(f))
-
-            self.assertEqual(len(linhas), 2)
-            self.assertEqual(linhas[1], ["1", "N", "Norte"])
-
-    def test_consolidador_ibge_gera_dimensao_estados(self):
-        """O arquivo de estados do IBGE deve gerar sua própria dimensão."""
-
-        with TemporaryDirectory() as tmp:
-            base = Path(tmp)
-            localidades_dir = base / "data" / "ibge" / "localidades"
-            localidades_dir.mkdir(parents=True)
-
-            with open(localidades_dir / "estados.json", "w", encoding="utf-8") as f:
-                json.dump(
-                    {
-                        "_meta": {"dataset": "estados"},
-                        "payload": {
-                            "id": 11,
-                            "sigla": "RO",
-                            "nome": "Rondonia",
-                            "regiao": {"id": 1, "sigla": "N", "nome": "Norte"},
-                        },
-                    },
-                    f,
-                    ensure_ascii=False,
-                )
-                f.write("\n")
-
-            conversor = ConversorEstadosIBGECSV(
-                data_dir=str(base / "data"),
-                output_dir=str(base / "data" / "csv" / "ibge"),
-                log_dir=str(base / "logs"),
-            )
-            conversor.executar()
-
-            csv_path = base / "data" / "csv" / "ibge" / "dim_estados.csv"
-            self.assertTrue(csv_path.exists())
-
-            with open(csv_path, encoding="utf-8") as f:
-                linhas = list(csv.reader(f))
-
-            self.assertEqual(len(linhas), 2)
-            self.assertEqual(linhas[1], ["11", "RO", "Rondonia", "1", "N", "Norte"])
-
-    def test_consolidador_ibge_gera_dimensao_municipios(self):
-        """O arquivo de municípios do IBGE deve gerar sua própria dimensão."""
-
-        with TemporaryDirectory() as tmp:
-            base = Path(tmp)
-            localidades_dir = base / "data" / "ibge" / "localidades"
-            localidades_dir.mkdir(parents=True)
-
-            with open(localidades_dir / "municipios.json", "w", encoding="utf-8") as f:
-                json.dump(
-                    {
-                        "_meta": {"dataset": "municipios"},
-                        "payload": {
-                            "id": 1100015,
-                            "nome": "Alta Floresta D'Oeste",
-                            "microrregiao": {
-                                "id": 11006,
-                                "nome": "Cacoal",
-                                "mesorregiao": {
-                                    "id": 1102,
-                                    "nome": "Leste Rondoniense",
-                                    "UF": {
-                                        "id": 11,
-                                        "sigla": "RO",
-                                        "nome": "Rondonia",
-                                        "regiao": {"id": 1, "sigla": "N", "nome": "Norte"},
-                                    },
-                                },
-                            },
-                            "regiao-imediata": {
-                                "id": 110005,
-                                "nome": "Cacoal",
-                                "regiao-intermediaria": {
-                                    "id": 1102,
-                                    "nome": "Ji-Parana",
-                                    "UF": {
-                                        "id": 11,
-                                        "sigla": "RO",
-                                        "nome": "Rondonia",
-                                        "regiao": {"id": 1, "sigla": "N", "nome": "Norte"},
-                                    },
-                                },
+        self._escrever_jsonl(
+            data_dir / "ibge" / "localidades" / "regioes.json",
+            {"payload": {"id": 1, "sigla": "N", "nome": "Norte"}},
+        )
+        self._escrever_jsonl(
+            data_dir / "ibge" / "localidades" / "estados.json",
+            {
+                "payload": {
+                    "id": 11,
+                    "sigla": "RO",
+                    "nome": "Rondonia",
+                    "regiao": {"id": 1, "sigla": "N", "nome": "Norte"},
+                }
+            },
+        )
+        self._escrever_jsonl(
+            data_dir / "ibge" / "localidades" / "municipios.json",
+            {
+                "payload": {
+                    "id": 1100015,
+                    "nome": "Alta Floresta D'Oeste",
+                    "microrregiao": {
+                        "id": 11006,
+                        "nome": "Cacoal",
+                        "mesorregiao": {
+                            "id": 1102,
+                            "nome": "Leste Rondoniense",
+                            "UF": {
+                                "id": 11,
+                                "sigla": "RO",
+                                "nome": "Rondonia",
+                                "regiao": {"id": 1, "sigla": "N", "nome": "Norte"},
                             },
                         },
                     },
-                    f,
-                    ensure_ascii=False,
-                )
-                f.write("\n")
+                    "regiao-imediata": {
+                        "id": 110005,
+                        "nome": "Cacoal",
+                        "regiao-intermediaria": {
+                            "id": 1102,
+                            "nome": "Ji-Parana",
+                            "UF": {
+                                "id": 11,
+                                "sigla": "RO",
+                                "nome": "Rondonia",
+                            },
+                        },
+                    },
+                }
+            },
+        )
 
-            conversor = ConversorMunicipiosIBGECSV(
-                data_dir=str(base / "data"),
-                output_dir=str(base / "data" / "csv" / "ibge"),
-                log_dir=str(base / "logs"),
-            )
-            conversor.executar()
+        self._escrever_jsonl(
+            data_dir / "senadores" / "ceaps_2025.json",
+            {
+                "id": 1,
+                "id_despesa_senado": 1,
+                "codSenador": 22,
+                "nomeSenador": "Senador Exemplo",
+                "tipoDocumento": "Recibo",
+                "fornecedor": "Fornecedor Senado",
+                "cpfCnpj": "07425595000176",
+                "documento_fornecedor_normalizado": "07425595000176",
+                "tipo_documento_fornecedor": "cnpj",
+                "cnpj_base_fornecedor": "07425595",
+                "documento": "112752",
+                "data": "2025-03-09",
+                "data_documento": "2025-03-09",
+                "detalhamento": "Pagamento de internet.",
+                "tipoDespesa": "Aluguel de imóveis para escritório político",
+                "valorReembolsado": 281.58,
+                "ano": 2025,
+                "mes": 2,
+                "ano_arquivo": 2025,
+                "orgao_origem": "senado",
+                "endpoint_origem": "ceaps",
+            },
+        )
 
-            csv_path = base / "data" / "csv" / "ibge" / "dim_municipios.csv"
-            self.assertTrue(csv_path.exists())
+        self._escrever_jsonl(
+            data_dir / "siconfi" / "entes" / "consulta=all.json",
+            {
+                "payload": {
+                    "cod_ibge": 3527207,
+                    "ente": "Lorena",
+                    "capital": "0",
+                    "regiao": "SE",
+                    "uf": "SP",
+                    "esfera": "M",
+                    "exercicio": 2026,
+                    "populacao": 87468,
+                    "cnpj": "47563739000175",
+                }
+            },
+        )
 
-            with open(csv_path, encoding="utf-8") as f:
-                linhas = list(csv.reader(f))
+        self._escrever_jsonl(
+            data_dir / "orcamento_item_despesa" / "orcamento_item_despesa_2024.json",
+            {
+                "ano": 2024,
+                "id_item_despesa": "1177",
+                "codigo_funcao": "01",
+                "funcao": "Legislativa",
+                "codigo_subfuncao": "031",
+                "subfuncao": "Acao Legislativa",
+                "codigo_programa": "0034",
+                "programa": "Gestao Legislativa",
+                "codigo_acao": "4061",
+                "acao": "Processo Legislativo",
+                "codigo_unidade_orcamentaria": "01101",
+                "unidade_orcamentaria": "Camara dos Deputados",
+                "codigo_fonte": "1000",
+                "fonte": "Recursos Livres da Uniao",
+                "codigo_gnd": "4",
+                "gnd": "Investimentos",
+                "codigo_modalidade": "90",
+                "modalidade": "Aplicacoes Diretas",
+                "codigo_elemento": "51",
+                "elemento": "Obras e Instalacoes",
+                "valor_pago": "0",
+                "valor_empenhado": "0",
+                "valor_liquidado": "0",
+            },
+        )
 
-            self.assertEqual(len(linhas), 2)
-            self.assertEqual(linhas[1][0], "1100015")
-            self.assertEqual(linhas[1][2], "11")
-            self.assertEqual(linhas[1][9], "Leste Rondoniense")
-            self.assertEqual(linhas[1][15], "Cacoal")
+        return data_dir
 
-    def test_consolidador_siop_gera_um_csv_por_arquivo_com_colunas_filtradas(self):
-        """Cada arquivo anual do SIOP deve gerar seu próprio CSV com as colunas solicitadas."""
+    def test_gerador_gera_csvs_analiticos_normalizados(self):
+        """A geração final deve separar dimensões, documentos e fatos."""
 
         with TemporaryDirectory() as tmp:
             base = Path(tmp)
-            siop_dir = base / "data" / "orcamento_item_despesa"
-            siop_dir.mkdir(parents=True)
+            data_dir = self._criar_fontes_minimas(base)
+            output_dir = data_dir / "csv"
 
-            registros = {
-                "orcamento_item_despesa_2021.json": {
-                    "ano": 2021,
-                    "codigo_funcao": "01",
-                    "codigo_subfuncao": "031",
-                    "codigo_programa": "0034",
-                    "codigo_acao": "4061",
-                    "codigo_unidade_orcamentaria": "02101",
-                    "codigo_fonte": "100",
-                    "codigo_gnd": "3",
-                    "codigo_modalidade": "90",
-                    "codigo_elemento": "00",
-                    "orgao_origem": "siop",
-                    "valor_pago": "0",
-                    "valor_empenhado": "0",
-                    "valor_liquidado": "0",
-                    "campo_ignorado": "nao deve ir para o csv",
-                },
-                "orcamento_item_despesa_2024.json": {
-                    "ano": 2024,
-                    "codigo_funcao": "10",
-                    "codigo_subfuncao": "122",
-                    "codigo_programa": "2000",
-                    "codigo_acao": "20TP",
-                    "codigo_unidade_orcamentaria": "26101",
-                    "codigo_fonte": "144",
-                    "codigo_gnd": "4",
-                    "codigo_modalidade": "90",
-                    "codigo_elemento": "52",
-                    "orgao_origem": "siop",
-                    "valor_pago": "150.5",
-                    "valor_empenhado": "200.0",
-                    "valor_liquidado": "175.25",
-                },
-            }
+            gerados = set(GeradorCSVs(data_dir=data_dir, output_dir=output_dir).executar())
 
-            for nome_arquivo, registro in registros.items():
-                with open(siop_dir / nome_arquivo, "w", encoding="utf-8") as f:
-                    json.dump(registro, f, ensure_ascii=False)
-                    f.write("\n")
-
-            conversor = ConversorOrcamentoItemDespesaSIOPCSV(
-                data_dir=str(base / "data"),
-                output_dir=str(base / "data" / "csv" / "siop" / "orcamento_item_despesa"),
-                log_dir=str(base / "logs"),
-            )
-            conversor.executar()
-
-            csv_2021 = base / "data" / "csv" / "siop" / "orcamento_item_despesa" / "orcamento_item_despesa_2021.csv"
-            csv_2024 = base / "data" / "csv" / "siop" / "orcamento_item_despesa" / "orcamento_item_despesa_2024.csv"
-
-            self.assertTrue(csv_2021.exists())
-            self.assertTrue(csv_2024.exists())
-
-            with open(csv_2021, encoding="utf-8") as f:
-                linhas_2021 = list(csv.reader(f))
-
-            with open(csv_2024, encoding="utf-8") as f:
-                linhas_2024 = list(csv.reader(f))
-
-            cabecalho_esperado = [
-                "ano",
-                "codigo_funcao",
-                "codigo_subfuncao",
-                "codigo_programa",
-                "codigo_acao",
-                "codigo_unidade_orcamentaria",
-                "codigo_fonte",
-                "codigo_gnd",
-                "codigo_modalidade",
-                "codigo_elemento",
-                "orgao_origem",
-                "valor_pago",
-                "valor_empenhado",
-                "valor_liquidado",
-            ]
-
-            self.assertEqual(linhas_2021[0], cabecalho_esperado)
             self.assertEqual(
-                linhas_2021[1],
-                ["2021", "01", "031", "0034", "4061", "02101", "100", "3", "90", "00", "siop", "0", "0", "0"],
+                gerados,
+                {
+                    "dim_tempo.csv",
+                    "dim_competencia_mensal.csv",
+                    "dim_tipos_documento_fiscal.csv",
+                    "dim_tipos_despesa.csv",
+                    "dim_legislaturas_dep_federais.csv",
+                    "dim_dep_federal.csv",
+                    "dim_deputados_federais_referencia.csv",
+                    "tb_documentos_despesas_deputados.csv",
+                    "tb_despesas_deputados.csv",
+                    "dim_senadores.csv",
+                    "tb_documentos_despesas_senadores.csv",
+                    "tb_despesas_senadores.csv",
+                    "dim_regioes.csv",
+                    "dim_estados.csv",
+                    "dim_mesorregioes.csv",
+                    "dim_microrregioes.csv",
+                    "dim_regioes_intermediarias.csv",
+                    "dim_regioes_imediatas.csv",
+                    "dim_municipios.csv",
+                    "dim_entes.csv",
+                    "dim_funcao_siop.csv",
+                    "dim_subfuncao_siop.csv",
+                    "dim_programa.csv",
+                    "dim_acao_siop.csv",
+                    "dim_unidades_orcamentarias.csv",
+                    "dim_fontes_recurso.csv",
+                    "dim_gnds.csv",
+                    "dim_modalidades_aplicacao.csv",
+                    "dim_elementos_despesa.csv",
+                    "tb_execucao_orcamentaria.csv",
+                    "dim_fornecedores.csv",
+                },
             )
 
-            self.assertEqual(linhas_2024[0], cabecalho_esperado)
             self.assertEqual(
-                linhas_2024[1],
-                ["2024", "10", "122", "2000", "20TP", "26101", "144", "4", "90", "52", "siop", "150.5", "200.0", "175.25"],
+                self._ler_csv(output_dir / "dim_tempo.csv")[1:],
+                [["2025-03-09", "2025-03-09", "2025", "03", "09"], ["2025-04-10", "2025-04-10", "2025", "04", "10"]],
             )
-
-    def test_consolidador_siop_gera_um_csv_por_particao_preservando_subpastas(self):
-        """Cada partição do SIOP deve gerar um CSV próprio dentro da árvore de anos."""
-
-        with TemporaryDirectory() as tmp:
-            base = Path(tmp)
-            particoes_dir = base / "data" / "orcamento_item_despesa" / "_particoes"
-            (particoes_dir / "ano=2021").mkdir(parents=True)
-            (particoes_dir / "ano=2024").mkdir(parents=True)
-
-            registros = {
-                particoes_dir / "ano=2021" / "funcao=02.json": {
-                    "ano": 2021,
-                    "codigo_funcao": "02",
-                    "codigo_subfuncao": "122",
-                    "codigo_programa": "0033",
-                    "codigo_acao": "20GP",
-                    "codigo_unidade_orcamentaria": "14101",
-                    "codigo_fonte": "1027",
-                    "codigo_gnd": "3",
-                    "codigo_modalidade": "90",
-                    "codigo_elemento": "39",
-                    "orgao_origem": "siop",
-                    "valor_pago": "16271.85",
-                    "valor_empenhado": "16271.85",
-                    "valor_liquidado": "16271.85",
-                },
-                particoes_dir / "ano=2024" / "funcao=10.json": {
-                    "ano": 2024,
-                    "codigo_subfuncao": "122",
-                    "codigo_programa": "2000",
-                    "codigo_acao": "20TP",
-                    "codigo_unidade_orcamentaria": "26101",
-                    "codigo_fonte": "144",
-                    "codigo_gnd": "4",
-                    "codigo_modalidade": "90",
-                    "codigo_elemento": "52",
-                    "orgao_origem": "siop",
-                    "valor_pago": "150.5",
-                    "valor_empenhado": "200.0",
-                    "valor_liquidado": "175.25",
-                },
-            }
-
-            for caminho, registro in registros.items():
-                with open(caminho, "w", encoding="utf-8") as f:
-                    json.dump(registro, f, ensure_ascii=False)
-                    f.write("\n")
-
-            conversor = ConversorParticoesOrcamentoItemDespesaSIOPCSV(
-                data_dir=str(base / "data"),
-                output_dir=str(base / "data" / "csv" / "siop" / "orcamento_item_despesa_particoes"),
-                log_dir=str(base / "logs"),
-            )
-            conversor.executar()
-
-            csv_2021 = base / "data" / "csv" / "siop" / "orcamento_item_despesa_particoes" / "ano=2021" / "funcao=02.csv"
-            csv_2024 = base / "data" / "csv" / "siop" / "orcamento_item_despesa_particoes" / "ano=2024" / "funcao=10.csv"
-
-            self.assertTrue(csv_2021.exists())
-            self.assertTrue(csv_2024.exists())
-
-            with open(csv_2021, encoding="utf-8") as f:
-                linhas_2021 = list(csv.reader(f))
-
-            with open(csv_2024, encoding="utf-8") as f:
-                linhas_2024 = list(csv.reader(f))
-
-            self.assertEqual(linhas_2021[1][0], "2021")
-            self.assertEqual(linhas_2021[1][1], "02")
-            self.assertEqual(linhas_2021[1][-1], "16271.85")
-
-            self.assertEqual(linhas_2024[1][0], "2024")
-            self.assertEqual(linhas_2024[1][1], "10")
-            self.assertEqual(linhas_2024[1][-1], "175.25")
-
-    def test_consolidador_pncp_gera_um_csv_por_arquivo_de_atas(self):
-        """Cada arquivo mensal de atas do PNCP deve gerar um CSV próprio com as colunas filtradas."""
-
-        with TemporaryDirectory() as tmp:
-            base = Path(tmp)
-            atas_dir = base / "data" / "pncp" / "atas"
-            (atas_dir / "ano=2025").mkdir(parents=True)
-            (atas_dir / "ano=2026").mkdir(parents=True)
-
-            registros = {
-                atas_dir / "ano=2025" / "mes=12.json": {
-                    "_meta": {
-                        "dataset": "atas",
-                        "data_inicial": "2025-12-01",
-                        "data_final": "2025-12-31",
-                        "orgao_origem": "pncp",
-                    },
-                    "payload": {
-                        "numeroControlePNCPAta": "111-1-000001/2025-000001",
-                        "numeroAtaRegistroPreco": "ARP-001",
-                        "numeroControlePNCPCompra": "111-1-000001/2025",
-                        "cancelado": False,
-                        "dataCancelamento": None,
-                        "dataAssinatura": "2025-12-10",
-                        "vigenciaInicio": "2025-12-11",
-                        "vigenciaFim": "2026-12-11",
-                        "dataPublicacaoPncp": "2025-12-12",
-                        "dataInclusao": "2025-12-12",
-                        "dataAtualizacao": "2025-12-13",
-                        "dataAtualizacaoGlobal": "2025-12-14",
-                        "usuario": "Usuario PNCP",
-                        "cnpjOrgao": "12345678000199",
-                        "nomeOrgao": "ORGAO A",
-                        "cnpjOrgaoSubrogado": None,
-                        "nomeOrgaoSubrogado": None,
-                        "codigoUnidadeOrgao": "1",
-                        "nomeUnidadeOrgao": "UNIDADE A",
-                        "codigoUnidadeOrgaoSubrogado": None,
-                        "nomeUnidadeOrgaoSubrogado": None,
-                        "campo_ignorado": "nao vai para o csv",
-                    },
-                },
-                atas_dir / "ano=2026" / "mes=01.json": {
-                    "_meta": {
-                        "dataset": "atas",
-                        "data_inicial": "2026-01-01",
-                        "data_final": "2026-01-31",
-                        "orgao_origem": "pncp",
-                    },
-                    "payload": {
-                        "numeroControlePNCPAta": "222-1-000001/2026-000001",
-                        "numeroAtaRegistroPreco": "ARP-002",
-                        "numeroControlePNCPCompra": "222-1-000001/2026",
-                        "cancelado": True,
-                        "dataCancelamento": "2026-01-15",
-                        "dataAssinatura": "2026-01-05",
-                        "vigenciaInicio": "2026-01-06",
-                        "vigenciaFim": "2027-01-06",
-                        "dataPublicacaoPncp": "2026-01-07",
-                        "dataInclusao": "2026-01-07",
-                        "dataAtualizacao": "2026-01-08",
-                        "dataAtualizacaoGlobal": "2026-01-09",
-                        "usuario": "Outro Usuario",
-                        "cnpjOrgao": "99887766000155",
-                        "nomeOrgao": "ORGAO B",
-                        "cnpjOrgaoSubrogado": "11223344000100",
-                        "nomeOrgaoSubrogado": "ORGAO SUBROGADO",
-                        "codigoUnidadeOrgao": "2",
-                        "nomeUnidadeOrgao": "UNIDADE B",
-                        "codigoUnidadeOrgaoSubrogado": "20",
-                        "nomeUnidadeOrgaoSubrogado": "UNIDADE SUBROGADA",
-                    },
-                },
-            }
-
-            for caminho, registro in registros.items():
-                with open(caminho, "w", encoding="utf-8") as f:
-                    json.dump(registro, f, ensure_ascii=False)
-                    f.write("\n")
-
-            conversor = ConversorAtasPNCPCSV(
-                data_dir=str(base / "data"),
-                output_dir=str(base / "data" / "csv" / "pncp" / "atas"),
-                log_dir=str(base / "logs"),
-            )
-            conversor.executar()
-
-            csv_2025 = base / "data" / "csv" / "pncp" / "atas" / "ano=2025" / "mes=12.csv"
-            csv_2026 = base / "data" / "csv" / "pncp" / "atas" / "ano=2026" / "mes=01.csv"
-
-            self.assertTrue(csv_2025.exists())
-            self.assertTrue(csv_2026.exists())
-
-            with open(csv_2025, encoding="utf-8") as f:
-                linhas_2025 = list(csv.reader(f))
-
-            with open(csv_2026, encoding="utf-8") as f:
-                linhas_2026 = list(csv.reader(f))
-
-            cabecalho_esperado = [
-                "data_inicial",
-                "data_final",
-                "orgao_origem",
-                "numeroControlePNCPAta",
-                "numeroAtaRegistroPreco",
-                "numeroControlePNCPCompra",
-                "cancelado",
-                "dataCancelamento",
-                "dataAssinatura",
-                "vigenciaInicio",
-                "vigenciaFim",
-                "dataPublicacaoPncp",
-                "dataInclusao",
-                "dataAtualizacao",
-                "dataAtualizacaoGlobal",
-                "usuario",
-                "cnpjOrgao",
-                "nomeOrgao",
-                "cnpjOrgaoSubrogado",
-                "nomeOrgaoSubrogado",
-                "codigoUnidadeOrgao",
-                "nomeUnidadeOrgao",
-                "codigoUnidadeOrgaoSubrogado",
-                "nomeUnidadeOrgaoSubrogado",
-            ]
-
-            self.assertEqual(linhas_2025[0], cabecalho_esperado)
             self.assertEqual(
-                linhas_2025[1],
+                self._ler_csv(output_dir / "dim_competencia_mensal.csv")[1:],
+                [["2025-02", "2025", "02"], ["2025-03", "2025", "03"]],
+            )
+            self.assertEqual(
+                self._ler_csv(output_dir / "dim_dep_federal.csv")[1],
+                ["123", "Deputado Exemplo", "ABC", "SP", "57"],
+            )
+            self.assertEqual(
+                self._ler_csv(output_dir / "dim_deputados_federais_referencia.csv")[1],
+                ["123", "Deputado Exemplo", "SP", "57", "57"],
+            )
+            self.assertEqual(
+                self._ler_csv(output_dir / "tb_documentos_despesas_deputados.csv")[1],
+                ["7514302", "12345678000190", "camara:0:nota_fiscal", "2025-04-10", "NF-29", "100.00"],
+            )
+            self.assertEqual(
+                self._ler_csv(output_dir / "tb_despesas_deputados.csv")[1][1:6],
+                ["7514302", "123", "57", "camara:combustivel", "2025-03"],
+            )
+            self.assertEqual(
+                self._ler_csv(output_dir / "tb_documentos_despesas_senadores.csv")[1][1:],
                 [
-                    "2025-12-01",
-                    "2025-12-31",
-                    "pncp",
-                    "111-1-000001/2025-000001",
-                    "ARP-001",
-                    "111-1-000001/2025",
-                    "False",
-                    "",
-                    "2025-12-10",
-                    "2025-12-11",
-                    "2026-12-11",
-                    "2025-12-12",
-                    "2025-12-12",
-                    "2025-12-13",
-                    "2025-12-14",
-                    "Usuario PNCP",
-                    "12345678000199",
-                    "ORGAO A",
-                    "",
-                    "",
-                    "1",
-                    "UNIDADE A",
-                    "",
-                    "",
+                    "07425595000176",
+                    "senado::recibo",
+                    "2025-03-09",
+                    "112752",
+                    "Pagamento de internet.",
                 ],
             )
+            self.assertEqual(
+                self._ler_csv(output_dir / "tb_despesas_senadores.csv")[1][1:],
+                [
+                    self._ler_csv(output_dir / "tb_documentos_despesas_senadores.csv")[1][0],
+                    "22",
+                    "senado:aluguel_de_imoveis_para_escritorio_politico",
+                    "2025-02",
+                    "281.58",
+                ],
+            )
+            self.assertEqual(
+                self._ler_csv(output_dir / "dim_mesorregioes.csv")[1],
+                ["1102", "Leste Rondoniense", "11"],
+            )
+            self.assertEqual(
+                self._ler_csv(output_dir / "dim_municipios.csv")[1],
+                ["1100015", "Alta Floresta D'Oeste", "11", "11006", "110005"],
+            )
+            self.assertEqual(
+                self._ler_csv(output_dir / "dim_entes.csv")[1],
+                ["3527207", "Lorena", "SP", "M", "0", "87468", "47563739000175"],
+            )
+            self.assertEqual(
+                self._ler_csv(output_dir / "dim_subfuncao_siop.csv")[1],
+                ["031", "Acao Legislativa", "01"],
+            )
+            self.assertEqual(
+                self._ler_csv(output_dir / "dim_acao_siop.csv")[1],
+                ["2024", "4061", "Processo Legislativo", "0034", "031"],
+            )
+            self.assertEqual(
+                self._ler_csv(output_dir / "tb_execucao_orcamentaria.csv")[1],
+                ["1177", "2024", "031", "0034", "4061", "01101", "1000", "4", "90", "51", "0", "0", "0"],
+            )
 
-            self.assertEqual(linhas_2026[0], cabecalho_esperado)
-            self.assertEqual(linhas_2026[1][0], "2026-01-01")
-            self.assertEqual(linhas_2026[1][3], "222-1-000001/2026-000001")
-            self.assertEqual(linhas_2026[1][6], "True")
-            self.assertEqual(linhas_2026[1][18], "11223344000100")
-            self.assertEqual(linhas_2026[1][23], "UNIDADE SUBROGADA")
+            fornecedores = self._ler_csv(output_dir / "dim_fornecedores.csv")
+            self.assertEqual(
+                fornecedores[0],
+                ["id_fornecedor", "documento", "tipo_documento", "cnpj_base", "nome_principal"],
+            )
+            self.assertEqual(len(fornecedores), 3)
 
-    def test_consolidador_portal_gera_dim_fornecedores_com_colunas_reduzidas(self):
-        """A dimensão de fornecedores do Portal deve exportar apenas os campos essenciais."""
+    def test_gerador_falha_cedo_quando_a_extracao_esta_incompleta(self):
+        """`gerar-csv` deve ser rejeitado antes de montar saídas parciais."""
 
         with TemporaryDirectory() as tmp:
             base = Path(tmp)
-            dimensoes_dir = base / "data" / "portal_transparencia" / "dimensoes"
-            dimensoes_dir.mkdir(parents=True)
-
-            registro = {
-                "documento": "17895646000187",
-                "tipo_documento": "cnpj",
-                "cnpj_base": "17895646",
-                "nome_principal": "UBER DO BRASIL TECNOLOGIA LTDA.",
-                "fontes": {"camara": 135},
-                "anos": [2025, 2024, 2023],
-                "total_ocorrencias": 135,
-            }
-
-            with open(dimensoes_dir / "fornecedores.jsonl", "w", encoding="utf-8") as f:
-                json.dump(registro, f, ensure_ascii=False)
-                f.write("\n")
-
-            conversor = ConversorFornecedoresPortalCSV(
-                data_dir=str(base / "data"),
-                output_dir=str(base / "data" / "csv" / "portal_transparencia" / "dimensoes"),
-                log_dir=str(base / "logs"),
-            )
-            conversor.executar()
-
-            csv_path = base / "data" / "csv" / "portal_transparencia" / "dimensoes" / "dim_fornecedores.csv"
-            self.assertTrue(csv_path.exists())
-
-            with open(csv_path, encoding="utf-8") as f:
-                linhas = list(csv.reader(f))
-
-            self.assertEqual(
-                linhas[0],
-                ["documento", "tipo_documento", "cnpj_base", "nome_principal"],
-            )
-            self.assertEqual(
-                linhas[1],
-                ["17895646000187", "cnpj", "17895646", "UBER DO BRASIL TECNOLOGIA LTDA."],
+            data_dir = base / "data"
+            self._escrever_jsonl(
+                data_dir / "legislaturas.json",
+                {"id": 57, "dataInicio": "2023-02-01", "dataFim": "2027-01-31"},
             )
 
-    def test_orquestrador_executa_todos_os_geradores_registrados(self):
-        """O orquestrador deve instanciar e executar todos os geradores registrados."""
+            with self.assertRaises(UserInputError) as ctx:
+                GeradorCSVs(data_dir=data_dir, output_dir=data_dir / "csv").executar()
+
+        self.assertIn("deputados por legislatura da Camara", str(ctx.exception))
+        self.assertIn("despesas CEAPS do Senado", str(ctx.exception))
+
+    def test_gerador_executa_as_rotinas_registradas(self):
+        """A fachada pública deve respeitar a ordem do registry em `utils.csv`."""
 
         chamadas = []
 
-        class FakeGeradorA:
-            def __init__(self, data_dir: str, output_dir: str, log_dir: str):
-                self.data_dir = Path(data_dir)
-                self.output_dir = Path(output_dir)
-                self.log_dir = Path(log_dir)
+        def _rotina_a(data_dir: Path, output_dir: Path) -> list[str]:
+            chamadas.append(("a", data_dir, output_dir))
+            return ["a.csv"]
 
-            def executar(self):
-                chamadas.append(("a", self.data_dir, self.output_dir, self.log_dir))
+        def _rotina_b(data_dir: Path, output_dir: Path) -> list[str]:
+            chamadas.append(("b", data_dir, output_dir))
+            return ["b.csv"]
 
-        class FakeGeradorB:
-            def __init__(self, data_dir: str, output_dir: str, log_dir: str):
-                self.data_dir = Path(data_dir)
-                self.output_dir = Path(output_dir)
-                self.log_dir = Path(log_dir)
-
-            def executar(self):
-                chamadas.append(("b", self.data_dir, self.output_dir, self.log_dir))
-
-        registros_originais = OrquestradorGeracaoCSVs.GERADORES_CSV
+        rotinas = (
+            SimpleNamespace(nome="a", fontes_obrigatorias=(), executar=_rotina_a),
+            SimpleNamespace(nome="b", fontes_obrigatorias=(), executar=_rotina_b),
+        )
 
         with TemporaryDirectory() as tmp:
             base = Path(tmp)
-
-            try:
-                OrquestradorGeracaoCSVs.GERADORES_CSV = (
-                    ("fake_a", FakeGeradorA, Path("grupo_a")),
-                    ("fake_b", FakeGeradorB, Path("grupo_b") / "subgrupo"),
-                )
-
-                executados = OrquestradorGeracaoCSVs(
-                    data_dir=str(base / "data"),
-                    output_dir=str(base / "data" / "csv"),
-                    log_dir=str(base / "logs"),
+            with patch("utils.csv.ROTINAS_CSV", rotinas):
+                gerados = GeradorCSVs(
+                    data_dir=base / "data",
+                    output_dir=base / "csv",
                 ).executar()
-            finally:
-                OrquestradorGeracaoCSVs.GERADORES_CSV = registros_originais
 
-        self.assertEqual(executados, ["fake_a", "fake_b"])
+        self.assertEqual(gerados, ["a.csv", "b.csv"])
         self.assertEqual(
             chamadas,
             [
-                ("a", base / "data", base / "data" / "csv" / "grupo_a", base / "logs"),
-                ("b", base / "data", base / "data" / "csv" / "grupo_b" / "subgrupo", base / "logs"),
+                ("a", base / "data", base / "csv"),
+                ("b", base / "data", base / "csv"),
             ],
         )
 

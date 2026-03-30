@@ -18,6 +18,22 @@ Responsabilidades principais:
 - `extracao/siop/transformador.py`: mapeamento de bindings para o schema de saída.
 - `extracao/siop/tarefas.py`: helpers puros de tempo e priorização de anos.
 
+Saída analítica derivada via `gerar-csv`:
+
+- `data/csv/dim_funcao_siop.csv`
+- `data/csv/dim_subfuncao_siop.csv`
+- `data/csv/dim_programa.csv`
+- `data/csv/dim_acao_siop.csv`
+- `data/csv/dim_unidades_orcamentarias.csv`
+- `data/csv/dim_fontes_recurso.csv`
+- `data/csv/dim_gnds.csv`
+- `data/csv/dim_modalidades_aplicacao.csv`
+- `data/csv/dim_elementos_despesa.csv`
+- `data/csv/tb_execucao_orcamentaria.csv`
+
+Na camada analítica final, URIs RDF continuam no staging JSONL para rastreabilidade,
+mas os CSVs sobem apenas os códigos e descrições necessários para análise.
+
 O que encontramos aqui:
 
 - exploração do dataset RDF do orçamento federal

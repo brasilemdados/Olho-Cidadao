@@ -1,6 +1,5 @@
 """Constrói a dimensão local de fornecedores usada pelo pipeline do Portal."""
 
-import csv
 import json
 from collections import Counter
 from pathlib import Path
@@ -38,38 +37,24 @@ class ConstrutorDimFornecedoresPortal:
     def __init__(
         self,
         output_path: str | Path = PORTAL_FORNECEDORES_PATH,
+        diretorio_camara: str | Path = "data/despesas_deputados_federais",
+        diretorio_senado: str | Path = "data/senadores",
     ):
         """Define onde a dimensão consolidada será persistida."""
 
         self.output_path = Path(output_path)
+        self.diretorio_camara = Path(diretorio_camara)
+        self.diretorio_senado = Path(diretorio_senado)
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
         self.tmp_path = self.output_path.with_suffix(".jsonl.tmp")
-
-    def _iterar_camara_csv(self):
-        """Lê fornecedores a partir do CSV consolidado da Câmara, se existir."""
-
-        caminho = Path("data/csv/despesas.csv")
-        if not caminho.exists():
-            return
-
-        with open(caminho, encoding="utf-8") as f:
-            leitor = csv.DictReader(f)
-            for row in leitor:
-                yield {
-                    "documento": row.get("cnpjCpfFornecedor"),
-                    "nome": row.get("nomeFornecedor"),
-                    "ano": row.get("ano"),
-                    "origem": "camara",
-                }
 
     def _iterar_camara_raw(self):
         """Lê fornecedores diretamente dos JSONs de despesas da Câmara."""
 
-        caminho = Path("data/despesas_deputados_federais")
-        if not caminho.exists():
+        if not self.diretorio_camara.exists():
             return
 
-        for row in _iterar_jsonl(sorted(caminho.glob("**/*.json"))):
+        for row in _iterar_jsonl(sorted(self.diretorio_camara.glob("**/*.json"))):
             yield {
                 "documento": row.get("cnpjCpfFornecedor"),
                 "nome": row.get("nomeFornecedor"),
@@ -77,17 +62,21 @@ class ConstrutorDimFornecedoresPortal:
                 "origem": "camara",
             }
 
-    def _iterar_senado(self):
+    def _iterar_senado_raw(self):
         """Lê fornecedores presentes nos arquivos anuais do Senado."""
 
-        caminho = Path("data/senadores")
-        if not caminho.exists():
+        if not self.diretorio_senado.exists():
             return
 
         nome_keys = ("fornecedor", "nomeFornecedor", "razaoSocial")
-        doc_keys = ("cnpjCpfFornecedor", "cpfCnpjFornecedor", "cnpjFornecedor")
+        doc_keys = (
+            "cpfCnpj",
+            "cnpjCpfFornecedor",
+            "cpfCnpjFornecedor",
+            "cnpjFornecedor",
+        )
 
-        for arquivo in sorted(caminho.glob("ceaps_*.json")):
+        for arquivo in sorted(self.diretorio_senado.glob("ceaps_*.json")):
             ano_arquivo = arquivo.stem.split("_")[-1]
             for row in _iterar_jsonl((arquivo,)):
                 nome = next((row.get(chave) for chave in nome_keys if row.get(chave)), None)
@@ -104,16 +93,8 @@ class ConstrutorDimFornecedoresPortal:
     def _iterar_registros(self):
         """Itera os registros de fornecedores a partir das fontes locais disponíveis."""
 
-        csv_path = Path("data/csv/despesas.csv")
-
-        # O CSV consolidado reduz custo de leitura. Quando ele ainda não existe,
-        # o builder faz fallback para os JSONs brutos da Câmara.
-        if csv_path.exists():
-            yield from self._iterar_camara_csv() or []
-        else:
-            yield from self._iterar_camara_raw() or []
-
-        yield from self._iterar_senado() or []
+        yield from self._iterar_camara_raw() or []
+        yield from self._iterar_senado_raw() or []
 
     def construir(self, min_ocorrencias: int | None = None):
         """Reconstrói a dimensão consolidada de fornecedores.

@@ -32,7 +32,6 @@ from pipeline.tarefas import portal_api_key_configurada
 from pipeline.tarefas import validar_intervalo_anos
 from pipeline.tarefas import validar_intervalo_datas
 from pipeline.tarefas import validar_max_workers
-from utils.csv.despesas_deputados import ConversorDespesasCSV
 from infra.errors import UserInputError
 
 
@@ -63,7 +62,7 @@ class PipelineCamara:
         )
 
     def executar(self):
-        """Executa todas as etapas do pipeline da Câmara em sequência."""
+        """Executa todas as etapas de extração da Câmara em sequência."""
 
         logger.info("=== INICIANDO PIPELINE COMPLETO DA CÂMARA ===")
         self._validar_precondicoes()
@@ -85,9 +84,6 @@ class PipelineCamara:
             ano_inicio=self.ano_inicio,
             ano_fim=self.ano_fim,
         )
-
-        logger.info("--- Etapa 3: Consolidando despesas em CSV ---")
-        ConversorDespesasCSV().executar()
 
         logger.info("=== PIPELINE FINALIZADO COM SUCESSO ===")
 

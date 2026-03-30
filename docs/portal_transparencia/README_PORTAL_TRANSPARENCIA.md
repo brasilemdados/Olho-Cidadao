@@ -38,6 +38,11 @@ uv run python main.py portal-construir-fornecedores --min-ocorrencias 2
 Saída:
 
 - `data/portal_transparencia/dimensoes/fornecedores.jsonl`
+- `data/csv/dim_fornecedores.csv` quando `gerar-csv` roda sobre a base já extraída
+
+Na camada CSV, a dimensão final publica só a identificação analítica mínima do
+fornecedor: documento, tipo, base do CNPJ e nome principal. Frequências, fontes,
+anos observados e demais metadados continuam apenas no JSONL interno.
 
 ### 2. Documentos por favorecido
 

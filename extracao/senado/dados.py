@@ -35,6 +35,8 @@ def enriquecer_registro_senado(item: dict, *, ano: int, nome_endpoint: str) -> d
     registro = dict(item)
     documento = normalizar_documento(registro.get("cpfCnpj"))
 
+    registro["id_despesa_senado"] = registro.get("id")
+    registro["data_documento"] = registro.get("data")
     registro["documento_fornecedor_normalizado"] = documento
     registro["tipo_documento_fornecedor"] = tipo_documento(documento)
     registro["cnpj_base_fornecedor"] = base_cnpj(documento)

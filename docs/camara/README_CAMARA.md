@@ -18,7 +18,7 @@ Extrair a cadeia base da Câmara:
 1. legislaturas
 2. deputados por legislatura
 3. despesas por deputado e por ano
-4. consolidacao em CSV
+4. consolidacao analitica em CSV
 
 ## Invariantes de manutenção
 
@@ -80,8 +80,9 @@ uv run python main.py gerar-csv
 
 Saída:
 
-- o comando agora orquestra todos os geradores de CSV registrados
-- no fluxo da Câmara, o consolidado principal fica em `data/csv/despesas/despesas.csv`
+- o comando agora só executa após as extrações base existirem
+- no fluxo da Câmara, os arquivos analíticos finais ficam em `data/csv/`
+- os principais artefatos da fonte são `data/csv/dim_legislaturas_dep_federais.csv`, `data/csv/dim_dep_federal.csv`, `data/csv/dim_deputados_federais_referencia.csv`, `data/csv/tb_documentos_despesas_deputados.csv` e `data/csv/tb_despesas_deputados.csv`
 
 ## Estratégia do crawler
 
@@ -93,7 +94,7 @@ Saída:
 - marcador `.empty` para tarefas confirmadas como vazias
 - reprocessamento automático quando o arquivo antigo não contém o esquema novo
 
-## Campos importantes para banco e joins
+## Campos importantes no staging JSONL
 
 Nos arquivos de despesas:
 
@@ -116,11 +117,24 @@ Nos arquivos de despesas:
 - `orgao_origem`
 - `endpoint_origem`
 
+## Contrato analítico final
+
+Na camada `data/csv/`, a granularidade foi separada entre documento e despesa:
+
+- `tb_documentos_despesas_deputados.csv` concentra o documento fiscal;
+- `tb_despesas_deputados.csv` concentra o evento de despesa e reembolso;
+- `dim_tempo.csv` representa a data do documento;
+- `dim_competencia_mensal.csv` representa o mês de competência financeira informado pela Câmara.
+
+Essa separação evita repetir `ano`, `mes` e `dataDocumento` no mesmo fato e remove
+metadados operacionais como `uri_deputado` e `endpoint_origem` dos CSVs analíticos.
+
 ## Join sugerido
 
 - fornecedor: `documento_fornecedor_normalizado` ou `cnpj_base_fornecedor`
 - parlamentar: `id_deputado`
-- recorte institucional: `id_legislatura`, `sigla_uf_deputado`, `sigla_partido_deputado`
+- recorte institucional: `id_legislatura`
+- recorte temporal: `id_competencia` e `id_tempo_documento`
 
 ## Pipeline
 

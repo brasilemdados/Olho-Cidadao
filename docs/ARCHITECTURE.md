@@ -98,7 +98,8 @@ Responsabilidades:
 - JSON Lines
 - filtros e slugs
 - normalização de documentos
-- geração de CSV
+- geração da camada analítica em CSV normalizado
+- geração de grafos analíticos derivados da camada CSV
 - paginação e parâmetros
 
 ## Estratégia de retomada
@@ -145,11 +146,25 @@ Detalhe:
 
 ## Modelo de dados
 
-O projeto ainda persiste majoritariamente em staging JSONL, mas já segue uma separação analítica implícita:
+O projeto ainda persiste majoritariamente em staging JSONL, mas a camada final em CSV já segue separação analítica explícita:
 
-- dimensões: legislaturas, localidades, entes, fornecedores derivados
-- fatos: despesas, documentos, notas fiscais, execuções, transferências
+- dimensões: tempo, competência, tipos de despesa, tipos de documento, legislaturas, localidades, entes e fornecedores
+- fatos: despesas, documentos de despesa, execuções, transferências e demais eventos numéricos
 - híbridos: contratos, atas, PCA, alguns cadastros mestres
+
+Na camada final em CSV:
+
+- `utils/csv/__init__.py` coordena toda a geração
+- a saída pública fica concentrada em `data/csv/`
+- a consolidação não acontece dentro das pipelines de extração
+- campos operacionais como `uri`, `endpoint` e metadados internos ficam no staging e não sobem para os arquivos analíticos
+- competência mensal e data do documento permanecem separadas quando a fonte oficial trata esses conceitos como eventos distintos
+
+Na camada de grafos:
+
+- `utils/grafo/__init__.py` coordena toda a geração
+- a saída pública fica concentrada em `data/grafo/`
+- o formato alvo atual é compatível com `cytoscape.js`
 
 ## Evolução recomendada
 

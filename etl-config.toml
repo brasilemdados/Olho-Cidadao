@@ -145,7 +145,11 @@ ano_fim = 2026
 
 [config.cli.gerar_csv]
 data_dir = "data"
-output_dir = "data"
+output_dir = "data/csv"
+
+[config.cli.gerar_grafo]
+csv_dir = "data/csv"
+output_dir = "data/grafo"
 
 [config.cli.portal]
 min_ocorrencias = 1
