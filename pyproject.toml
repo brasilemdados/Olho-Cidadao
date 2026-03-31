@@ -38,6 +38,7 @@ br-etl = "main:main"
 
 [dependency-groups]
 dev = [
+    "karva>=0.0.1a4",
     "ruff>=0.15.5",
 ]
 
@@ -51,3 +52,14 @@ namespaces = true
 [tool.ruff]
 target-version = "py314"
 line-length = 100
+
+[tool.karva.src]
+include = ["tests"]
+
+[tool.karva.terminal]
+output-format = "concise"
+
+[tool.karva.test]
+fail-fast = true
+test-function-prefix = "teste"
+try-import-fixtures = true

@@ -53,3 +53,9 @@ pnpm-debug.log*
 *.tar.gz
 node_modules/
 TODO.md
+
+
+# Added by cargo
+
+/target
+proxies.txt
